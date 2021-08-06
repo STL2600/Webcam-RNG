@@ -21,8 +21,6 @@ Individual random events are unpredictable.
 
 The probability, the likeliness of the outcome, is predictable
 
-
-
 ## Examples
 
 - Coin Flip
@@ -42,6 +40,9 @@ A numeric sequence is statistically random when it contains no recognizable patt
 
 
 
+## Statistically Random vs "True" Random
+
+![Dice Distribution](./images/dice-distrib.png)
 
 # Pseudo Random
 
@@ -112,6 +113,7 @@ Due to a lack of collective intelligence, we had someone else do the heavy lifti
 - 81 sources of randomness to benchmark against.
 
 
+
 # Lava Lamps as RNGs
 
 Why use a Lava Lamp?
@@ -119,9 +121,10 @@ Why use a Lava Lamp?
 - Digital cameras used to capture the images are inherently noisy.
 
 
+
 # SGI's Lava Rand
 
-Insert picture
+![LavaRand](./images/sgi-lavarand.jpg)
 
 ## SGI's Lava Rand
 
@@ -149,7 +152,7 @@ How it worked:
 
 One day Cloudflare saw what SGI had done and said "Hold my beer..."
 
-Insert Picture
+![The Wall of Entropy](./images/wall-of-entropy.jpg)
 
 ## Cloudflare's "Wall of Entropy"
 
@@ -166,13 +169,18 @@ Insert Picture
 - Access to the network could allow observation of the entropy feed.
 - Redirect any systems using the entropy feed to an alternate source.
 
+
+
 # Our Setup
 
 ## Hardware
 
- - Raspberry PI with USB webcam
+ - Raspberry PI with minimal Arch Linux build
+ - Cheap Janky Webcam (TM)
  - Lava Lamp
  - Plasma Ball
+ - Plasma Disc
+ - Wifi power strip controlled by Home Assistant
 
 ## Software
 
@@ -181,9 +189,77 @@ Insert Picture
 
 ## Sofware Walkthrough / Demo
 
+
+
 # Our Results
 
-## Testing Our Results
+Since we don't understand the math, we are doing A|B comparisons.
+
+
+
+## Our Results - 1st Test
+
+We used 1 million samples (i.e. 1 MB ) with 4 different methods.
+- /dev/random
+- Raw Video
+- Frame Diffs
+- Blake2 Hashes
+
+## Our Results - 1st Results
+
+Everything FAILED.
+
+With the exception of a few from `/dev/random` and the `blake2 hash`.
+
+## Our Results - Conclusion
+
+- 1 MB files are not nearly enough samples to test an RNG.  
+- The test would reach the end of a file, then loop back around.
+- This means everything was getting repeated over and over.
+- We would need close to 250GB of data
+
+
+
+## Our Resutls - 2nd Test
+
+- Re-directed the output to a TCP socket on the Pi.
+- Used netcat on an i7 desktop to capture the stream
+- Piped the stream into Dieharder with default settings
+
+## Our Results - 2nd Results
+
+Everything PASSED...
+
+## Our Results - Conclusion
+
+Either we are savants at this or we are doing something wrong.
+
+Maybe both...
+
+
+
+## Our Results - 3rd Test
+
+- Same setup as the previous test.
+- Set a multiplier in Dieharder that would run 100x as many p-samples.
+- Should make the test stricter and tease out more failures.
+- Also ran Dieharder with default settings against RANDU, a completely broken PRNG method.
+
+## Our Results - 3rd Results
+
+| RNG Method | PASSED | WEAK | FAILED |
+| RANDU      | 43     | 6    | 65     |
+| Frame Diff | 105    | 4    | 5      |
+| Blake2     | 105    | 5    | 4      |
+| Raw Video  | 102    | 8    | 4      |
+
+## Our Results - Conclusion
+
+- Finally some variation!
+- It *might* be working?
+- More testing with a higher multiplier is probably needed
+
+
 
 # Questions?
 
