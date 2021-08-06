@@ -6,12 +6,11 @@ const crypto = require('crypto');
 const _ = require('lodash');
 
 const frameEvents = new EventEmitter();
-const images = new CircularBuffer(5);
+const images = new CircularBuffer(16);
 
 async function readCameraImages() {
 	return new Promise((resolve, reject) => {
-		const webcam = NodeWebcam.create({
-			frames: 1,
+		const webcam = NodeWebcam.create({ frames: 1,
 			output: 'png',
 			callbackReturn: 'buffer',
 		});
@@ -36,6 +35,40 @@ async function readCameraImages() {
 	});
 }
 
+function makeServer(name, port, imgFunc) {
+	const server = net.createServer();
+	const events = new EventEmitter();
+
+	let handling = false;
+	frameEvents.on('frame', () => {
+		if (handling) return;
+		const output = imgFunc(images);
+		events.emit('data', output);
+		handling = false;
+	});
+
+	server.on('connection', (conn) => {
+		const remoteAddress = conn.remoteAddress + ':' + conn.remotePort;  
+		console.log(`new client connection for ${name} server from ${remoteAddress}`);
+
+		const sendData = (data) => conn.write(data);
+
+		events.on('data', sendData);
+
+		conn.once('close', () => {
+			events.off('data', sendData);
+		});  
+		conn.once('error', () => {
+			events.off('data', sendData);
+		});  
+	});
+
+	server.listen(port, function() {    
+	  console.log(`${name} server listening on ${port}`);  
+	});
+}
+
+
 // Take a byte array, and convert each 8 bytes into a single byte composed of
 // the least signifigant bits of each.  Remaining bytes after dividing by 8
 // are ignored.
@@ -51,113 +84,13 @@ function getLeastSigBits(bytes) {
 		.value());
 }
 
-// This server streams the raw images caputered from the camera
-async function makeRawImgServer() {
-	var rawImgServer = net.createServer();
-
-	rawImgServer.on('connection', (conn) => {
-		const remoteAddress = conn.remoteAddress + ':' + conn.remotePort;  
-		console.log('new client connection from %s', remoteAddress);
-
-		const sendFrame = () => {
-			conn.write(images.get(0));
-		};
-
-		frameEvents.on('frame', sendFrame);
-
-		conn.once('close', () => {
-			frameEvents.off('frame', sendFrame);
-		});  
-		conn.once('error', () => {
-			frameEvents.off('frame', sendFrame);
-		});  
-	});
-
-	rawImgServer.listen(9000, function() {    
-	  console.log('raw image server listening on %j', rawImgServer.address());  
-	});
-}
-
-// This server streams the least signifigant bits from the camera
-async function makeLeastSigBitsServer() {
-	var rawImgServer = net.createServer();
-
-	rawImgServer.on('connection', (conn) => {
-		const remoteAddress = conn.remoteAddress + ':' + conn.remotePort;  
-		console.log('new client connection from %s', remoteAddress);
-
-		const sendFrame = () => {
-			const img = images.get(0);
-			const bits = getLeastSigBits(img);
-			conn.write(bits);
-		};
-
-		frameEvents.on('frame', sendFrame);
-
-		conn.once('close', () => {
-			frameEvents.off('frame', sendFrame);
-		});  
-		conn.once('error', () => {
-			frameEvents.off('frame', sendFrame);
-		});  
-	});
-
-	rawImgServer.listen(9003, function() {    
-	  console.log('least sig bits server listening on %j', rawImgServer.address());  
-	});
-}
-
-// This server hashes each frame from the camera and outputs the hash
-async function makeHashedServer() {
-	var hashedServer = net.createServer();
-
-	const hashEvents = new EventEmitter();
-
-	let handling = false;
-	frameEvents.on('frame', () => {
-		if (handling) return;
-		handling = true;
-
+function hashImages(images) {
 		const imgHash = crypto.createHash('sha256');
 		imgHash.update(images.get(0));
-		hashEvents.emit('hash', imgHash.digest());
-
-		handling = false;
-	});
-
-	hashedServer.on('connection', (conn) => {
-		const remoteAddress = conn.remoteAddress + ':' + conn.remotePort;  
-		console.log('new client connection from %s', remoteAddress);
-
-		const sendHash = (hash) => {
-			conn.write(hash);
-		};
-
-		hashEvents.on('hash', sendHash);
-
-		conn.once('close', () => {
-			hashEvents.off('hash', sendHash);
-		});  
-		conn.once('error', () => {
-			hashEvents.off('hash', sendHash);
-		});  
-	});
-
-	hashedServer.listen(9001, function() {    
-	  console.log('hash server listening on %j', hashedServer.address());  
-	});
+		return imgHash.digest();
 }
 
-// This server takes the difference of each frame to the next and uses that diff
-// as the randomness
-async function makeFrameDiffServer() {
-	var diffServer = net.createServer();
-
-	const diffEvents = new EventEmitter();
-
-	let handling = false;
-	frameEvents.on('frame', () => {
-		if (handling) return;
+function diffImages(images) {
 		if (images.size() < 2) return;
 		handling = true;
 
@@ -177,43 +110,43 @@ async function makeFrameDiffServer() {
 			})
 			.filter((diff) => diff);
 
-		const output = getLeastSigBits(diff);
-
-		diffEvents.emit('diff', output);
-
-		handling = false;
-	});
-
-	diffServer.on('connection', (conn) => {
-		const remoteAddress = conn.remoteAddress + ':' + conn.remotePort;  
-		console.log('new client connection from %s', remoteAddress);
-
-		const sendDiff = (diff) => {
-			conn.write(diff);
-		};
-
-		diffEvents.on('diff', sendDiff);
-
-		conn.once('close', () => {
-			diffEvents.off('diff', sendDiff);
-		});  
-		conn.once('error', () => {
-			diffEvents.off('diff', sendDiff);
-		});  
-	});
-
-	diffServer.listen(9002, function() {    
-	  console.log('diff server listening on %j', diffServer.address());  
-	});
+		return getLeastSigBits(diff);
 }
 
+let feedAverage = null;
+let acc = [];
+function averageImages(images) {
+	if (feedAverage === null) {
+		if (images.size() > 10) {
+			const imageAverages = [];
+			for (let imgIdx = 0; imgIdx < 10; imgIdx += 1) {
+				imageAverages.push(_.mean(images.get(imgIdx)));
+			}
+			feedAverage = _.mean(imageAverages);
+		}
+	} else {
+		const imageAverage = _.mean(images.get(0));
+		if (imageAverage > feedAverage) acc.push(1);
+		if (imageAverage < feedAverage) acc.push(0);
+	}
+
+	if (acc.length === 8) {
+		const binaryNums = acc.map((num, idx) => (num & 1) << idx);
+		const combined = binaryNums.reduce((ret, num) => ret | num);
+		acc = [];
+		return Uint8Array.from([combined]);
+	}
+
+	return new Uint8Array();
+}
 
 Promise.all([
 	readCameraImages(),
-	makeRawImgServer(),
-	makeHashedServer(),
-	makeFrameDiffServer(),
-	makeLeastSigBitsServer(),
+	makeServer('raw images', 9000, (images) => images.get(0)),
+	makeServer('least sig bits', 9001, (images) => getLeastSigBits(images.get(0))),
+	makeServer('hashes', 9002, hashImages),
+	makeServer('diffs', 9003, diffImages),
+	makeServer('averages', 9004, averageImages),
 ])
 .catch((err) => {
 	console.dir(err);
