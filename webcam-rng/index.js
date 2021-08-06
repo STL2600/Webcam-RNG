@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const _ = require('lodash');
 
 const frameEvents = new EventEmitter();
-const images = new CircularBuffer(5);
+const images = new CircularBuffer(16);
 
 async function readCameraImages() {
 	return new Promise((resolve, reject) => {
@@ -113,12 +113,40 @@ function diffImages(images) {
 		return getLeastSigBits(diff);
 }
 
+let feedAverage = null;
+let acc = [];
+function averageImages(images) {
+	if (feedAverage === null) {
+		if (images.size() > 10) {
+			const imageAverages = [];
+			for (let imgIdx = 0; imgIdx < 10; imgIdx += 1) {
+				imageAverages.push(_.mean(images.get(imgIdx)));
+			}
+			feedAverage = _.mean(imageAverages);
+		}
+	} else {
+		const imageAverage = _.mean(images.get(0));
+		if (imageAverage > feedAverage) acc.push(1);
+		if (imageAverage < feedAverage) acc.push(0);
+	}
+
+	if (acc.length === 8) {
+		const binaryNums = acc.map((num, idx) => (num & 1) << idx);
+		const combined = binaryNums.reduce((ret, num) => ret | num);
+		acc = [];
+		return Uint8Array.from([combined]);
+	}
+
+	return new Uint8Array();
+}
+
 Promise.all([
 	readCameraImages(),
 	makeServer('raw images', 9000, (images) => images.get(0)),
 	makeServer('least sig bits', 9001, (images) => getLeastSigBits(images.get(0))),
 	makeServer('hashes', 9002, hashImages),
 	makeServer('diffs', 9003, diffImages),
+	makeServer('averages', 9004, averageImages),
 ])
 .catch((err) => {
 	console.dir(err);
