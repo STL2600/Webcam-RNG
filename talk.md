@@ -2,20 +2,41 @@
 % https://github.com/STL2600/Webcam-RNG
 
 
-# Slide 1
+# Randomness
 
-- Bullet 1
-- Bullet 2
+# "True" Random
 
-## Slide 1A
+## Examples
 
-# Slide 2
+# Statistically Random
 
-Stuff
+## Examples
 
-## Slide 2A
+# Pseudo Random
 
-![Picture](images/picture.png)
+## Examples
+
+# Cryptographically Random
+
+## Examples
+
+# Testing Randomness
+
+# Lava Lamps as RNGs
+
+## SGI's LavaRand
+
+## Cloudflare's "Wall of Entropy"
+
+# Our Setup
+
+## Hardware
+
+## Software
+
+# Our Results
+
+## Testing Our Results
 
 # Questions?
 
