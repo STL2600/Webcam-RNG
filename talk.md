@@ -57,9 +57,12 @@ A completely deterministic and repeatable process that produces a sequence of nu
 
 
 
-# Cryptographically Secure Pseudorandom Number Generators (CSPRNG)
+# CSPRNGs
+
+or "Cryptographically Secure Pseudorandom Number Generators"
 
 For a PRNG to be considered suitable for use with cryptography:
+
 - Must pass the "next-bit test"
 - Withstand "State Compromise Extensions"
 
@@ -83,6 +86,7 @@ Testing the probability of obtaining test results that are at least as extreme a
 ## Null Hypothesis Significance Testing
 
 How does that work?
+
 1. Pick your statistical test.
 2. Determine how unlikely extreme results are to occure.  Usually between 1-5%.  This is our "alpha".
 3. Run your tests and collect the results.
@@ -117,6 +121,7 @@ Due to a lack of collective intelligence, we had someone else do the heavy lifti
 # Lava Lamps as RNGs
 
 Why use a Lava Lamp?
+
 - They are a good source of entropy when used properly.
 - Digital cameras used to capture the images are inherently noisy.
 
@@ -142,6 +147,7 @@ Why use a Lava Lamp?
 ## SGI's Lava Rand
 
 How it worked:
+
 - Picture was taken with a digital camera.
 - Resulting image was hashed with SHA-1.
 - The hash is used to seed a PRNG
@@ -166,6 +172,9 @@ One day Cloudflare saw what SGI had done and said "Hold my beer..."
 - If an attacker can gain a view an point a camera at the lamps, they could attempt to recreate the image.
 - Attempt to reduce entropy by attacking power or obstructing the camera's view.
 - Compromise the camera that drives the camera and exfiltrate or modify data
+
+## Weaknesses in a Lava Lamp RNG
+
 - Access to the network could allow observation of the entropy feed.
 - Redirect any systems using the entropy feed to an alternate source.
 
@@ -200,6 +209,7 @@ Since we don't understand the math, we are doing A|B comparisons.
 ## Our Results - 1st Test
 
 We used 1 million samples (i.e. 1 MB ) with 4 different methods.
+
 - /dev/random
 - Raw Video
 - Frame Diffs
@@ -248,6 +258,7 @@ Maybe both...
 ## Our Results - 3rd Results
 
 | RNG Method | PASSED | WEAK | FAILED |
+-------------|--------|------|---------
 | RANDU      | 43     | 6    | 65     |
 | Frame Diff | 105    | 4    | 5      |
 | Blake2     | 105    | 5    | 4      |
