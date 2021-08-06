@@ -36,6 +36,9 @@ async function readCameraImages() {
 	});
 }
 
+// Take a byte array, and convert each 8 bytes into a single byte composed of
+// the least signifigant bits of each.  Remaining bytes after dividing by 8
+// are ignored.
 function getLeastSigBits(bytes) {
 	return Uint8Array.from(_.chain(bytes)
 		.chunk(8)
@@ -48,6 +51,7 @@ function getLeastSigBits(bytes) {
 		.value());
 }
 
+// This server streams the raw images caputered from the camera
 async function makeRawImgServer() {
 	var rawImgServer = net.createServer();
 
@@ -74,6 +78,7 @@ async function makeRawImgServer() {
 	});
 }
 
+// This server streams the least signifigant bits from the camera
 async function makeLeastSigBitsServer() {
 	var rawImgServer = net.createServer();
 
@@ -102,6 +107,7 @@ async function makeLeastSigBitsServer() {
 	});
 }
 
+// This server hashes each frame from the camera and outputs the hash
 async function makeHashedServer() {
 	var hashedServer = net.createServer();
 
@@ -142,6 +148,8 @@ async function makeHashedServer() {
 	});
 }
 
+// This server takes the difference of each frame to the next and uses that diff
+// as the randomness
 async function makeFrameDiffServer() {
 	var diffServer = net.createServer();
 
