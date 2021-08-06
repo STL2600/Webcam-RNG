@@ -9,8 +9,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "blake2": "^4.0.2",
     "circular-buffer": "^1.0.3",
+    "lodash": "^4.17.21",
     "node-webcam": "^0.8.0"
   }
 }

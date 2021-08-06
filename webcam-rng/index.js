@@ -2,7 +2,8 @@ const NodeWebcam = require('node-webcam');
 const net = require('net');
 const CircularBuffer = require("circular-buffer");
 const EventEmitter = require('events');
-const blake2 = require('blake2');
+const crypto = require('crypto');
+const _ = require('lodash');
 
 const frameEvents = new EventEmitter();
 const images = new CircularBuffer(5);
@@ -17,17 +18,34 @@ async function readCameraImages() {
 
 		const readNextImage = () => {
 			webcam.capture( "test_picture", function( err, data ) {
-				if (err) reject(err);
+				if (err) {
+					console.error(`error getting frame: ${err.message}`)
+
+				}
 				else {
 					images.enq(data);
 					frameEvents.emit('frame');
-					setTimeout(readNextImage, 1000 / 10);
+					console.error('read frame');
 				}
+
+				setTimeout(readNextImage, 1000 / 10);
 			});
 		}
 
 		readNextImage();
 	});
+}
+
+function getLeastSigBits(bytes) {
+	return Uint8Array.from(_.chain(bytes)
+		.chunk(8)
+		.filter((chunk) => chunk.length === 8)
+		.map((chunk) => {
+			const binaryNums = chunk.map((num, idx) => (num & 1) << idx);
+			const combined = binaryNums.reduce((ret, num) => ret | num);
+			return combined;
+		})
+		.value());
 }
 
 async function makeRawImgServer() {
@@ -56,6 +74,34 @@ async function makeRawImgServer() {
 	});
 }
 
+async function makeLeastSigBitsServer() {
+	var rawImgServer = net.createServer();
+
+	rawImgServer.on('connection', (conn) => {
+		const remoteAddress = conn.remoteAddress + ':' + conn.remotePort;  
+		console.log('new client connection from %s', remoteAddress);
+
+		const sendFrame = () => {
+			const img = images.get(0);
+			const bits = getLeastSigBits(img);
+			conn.write(bits);
+		};
+
+		frameEvents.on('frame', sendFrame);
+
+		conn.once('close', () => {
+			frameEvents.off('frame', sendFrame);
+		});  
+		conn.once('error', () => {
+			frameEvents.off('frame', sendFrame);
+		});  
+	});
+
+	rawImgServer.listen(9003, function() {    
+	  console.log('least sig bits server listening on %j', rawImgServer.address());  
+	});
+}
+
 async function makeHashedServer() {
 	var hashedServer = net.createServer();
 
@@ -66,7 +112,7 @@ async function makeHashedServer() {
 		if (handling) return;
 		handling = true;
 
-		const imgHash = blake2.createHash('blake2b');
+		const imgHash = crypto.createHash('sha256');
 		imgHash.update(images.get(0));
 		hashEvents.emit('hash', imgHash.digest());
 
@@ -115,13 +161,15 @@ async function makeFrameDiffServer() {
 		const previousFrameCopy = Buffer.alloc(previousFrame.length);
 		previousFrame.copy(previousFrameCopy);
 
-		const output = currentFrameCopy
+		const diff = currentFrameCopy
 			.map((currentPixel, idx) => {
 				const previousPixel = previousFrameCopy[idx];
 				if (currentPixel === previousPixel) return null;
 				return currentPixel ^ previousPixel;
 			})
-			.filter((diff) => diff !== null);
+			.filter((diff) => diff);
+
+		const output = getLeastSigBits(diff);
 
 		diffEvents.emit('diff', output);
 
@@ -151,11 +199,13 @@ async function makeFrameDiffServer() {
 	});
 }
 
+
 Promise.all([
 	readCameraImages(),
 	makeRawImgServer(),
 	makeHashedServer(),
 	makeFrameDiffServer(),
+	makeLeastSigBitsServer(),
 ])
 .catch((err) => {
 	console.dir(err);
