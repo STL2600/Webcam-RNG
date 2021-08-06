@@ -182,6 +182,8 @@ One day Cloudflare saw what SGI had done and said "Hold my beer..."
 
 # Our Setup
 
+![Our Setup](./images/our-setup.jpg)
+
 ## Hardware
 
  - Raspberry PI with minimal Arch Linux build
