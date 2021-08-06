@@ -170,7 +170,16 @@ Insert Picture
 
 ## Hardware
 
+ - Raspberry PI with USB webcam
+ - Lava Lamp
+ - Plasma Ball
+
 ## Software
+
+ - FSWebCam for getting webcam images
+ - Node.JS server to provide random data streams
+
+## Sofware Walkthrough / Demo
 
 # Our Results
 
